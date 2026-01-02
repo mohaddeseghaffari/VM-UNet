@@ -22,7 +22,7 @@ class setting_config:
         'input_channels': 3,
         'depths': [2,2,2,2],
         'depths_decoder': [2,2,2,1],
-        'drop_path_rate': 0.2,
+        'drop_path_rate': 0.0,
         'load_ckpt_path': "./pre_trained_weights/vmamba_tiny_e292.pth",      # no pretrained backbone
     }
 
