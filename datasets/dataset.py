@@ -1,52 +1,17 @@
-from torch.utils.data import Dataset
-import numpy as np
 import os
+import numpy as np
 from PIL import Image
-
-import random
-import h5py
 import torch
-from scipy import ndimage
-from scipy.ndimage.interpolation import zoom
 from torch.utils.data import Dataset
 from scipy import ndimage
-from PIL import Image
+from scipy.ndimage import zoom
+import random
 
+def is_image_file(filename):
+    IMG_EXT = [".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"]
+    return any(filename.lower().endswith(ext) for ext in IMG_EXT)
 
-class NPY_datasets(Dataset):
-    def __init__(self, path_Data, config, train=True):
-        super(NPY_datasets, self)
-        if train:
-            images_list = sorted(os.listdir(path_Data+'train/images/'))
-            masks_list = sorted(os.listdir(path_Data+'train/masks/'))
-            self.data = []
-            for i in range(len(images_list)):
-                img_path = path_Data+'train/images/' + images_list[i]
-                mask_path = path_Data+'train/masks/' + masks_list[i]
-                self.data.append([img_path, mask_path])
-            self.transformer = config.train_transformer
-        else:
-            images_list = sorted(os.listdir(path_Data+'val/images/'))
-            masks_list = sorted(os.listdir(path_Data+'val/masks/'))
-            self.data = []
-            for i in range(len(images_list)):
-                img_path = path_Data+'val/images/' + images_list[i]
-                mask_path = path_Data+'val/masks/' + masks_list[i]
-                self.data.append([img_path, mask_path])
-            self.transformer = config.test_transformer
-        
-    def __getitem__(self, indx):
-        img_path, msk_path = self.data[indx]
-        img = np.array(Image.open(img_path).convert('RGB'))
-        msk = np.expand_dims(np.array(Image.open(msk_path).convert('L')), axis=2) / 255
-        img, msk = self.transformer((img, msk))
-        return img, msk
-
-    def __len__(self):
-        return len(self.data)
-    
-
-
+# ------------------ Augmentation functions ------------------
 def random_rot_flip(image, label):
     k = np.random.randint(0, 4)
     image = np.rot90(image, k)
@@ -56,61 +21,57 @@ def random_rot_flip(image, label):
     label = np.flip(label, axis=axis).copy()
     return image, label
 
-
 def random_rotate(image, label):
     angle = np.random.randint(-20, 20)
     image = ndimage.rotate(image, angle, order=0, reshape=False)
     label = ndimage.rotate(label, angle, order=0, reshape=False)
     return image, label
 
+# ------------------ Dataset class ------------------
+class ISIC17Dataset(Dataset):
+    def __init__(self, path_Data, config, train=True):
+        super().__init__()
+        self.train = train
+        img_dir = os.path.join(path_Data, "val/images")
+        mask_dir = os.path.join(path_Data, "val/masks")
+        self.transformer = config.train_transformer if train else config.test_transformer
 
-class RandomGenerator(object):
-    def __init__(self, output_size):
-        self.output_size = output_size
+        images_list = sorted([f for f in os.listdir(img_dir) if is_image_file(f)])
+        masks_list = sorted([f for f in os.listdir(mask_dir) if is_image_file(f)])
 
-    def __call__(self, sample):
-        image, label = sample['image'], sample['label']
+        self.data = []
+        for img_name in images_list:
+            base_name = os.path.splitext(img_name)[0]
+            mask_name = base_name + "_segmentation.png"
 
-        if random.random() > 0.5:
-            image, label = random_rot_flip(image, label)
-        elif random.random() > 0.5:
-            image, label = random_rotate(image, label)
-        x, y = image.shape
-        if x != self.output_size[0] or y != self.output_size[1]:
-            image = zoom(image, (self.output_size[0] / x, self.output_size[1] / y), order=3)  # why not 3?
-            label = zoom(label, (self.output_size[0] / x, self.output_size[1] / y), order=0)
-        image = torch.from_numpy(image.astype(np.float32)).unsqueeze(0)
-        label = torch.from_numpy(label.astype(np.float32))
-        sample = {'image': image, 'label': label.long()}
-        return sample
+            if mask_name not in masks_list:
+                print(f"⚠ Mask not found for {img_name}, skipping...")
+                continue
 
+            self.data.append([
+                os.path.join(img_dir, img_name),
+                os.path.join(mask_dir, mask_name)
+            ])
 
-class Synapse_dataset(Dataset):
-    def __init__(self, base_dir, list_dir, split, transform=None):
-        self.transform = transform  # using transform in torch!
-        self.split = split
-        self.sample_list = open(os.path.join(list_dir, self.split+'.txt')).readlines()
-        self.data_dir = base_dir
-
-    def __len__(self):
-        return len(self.sample_list)
+        print(f"✅ Loaded {len(self.data)} image-mask pairs from {img_dir}")
 
     def __getitem__(self, idx):
-        if self.split == "train":
-            slice_name = self.sample_list[idx].strip('\n')
-            data_path = os.path.join(self.data_dir, slice_name+'.npz')
-            data = np.load(data_path)
-            image, label = data['image'], data['label']
-        else:
-            vol_name = self.sample_list[idx].strip('\n')
-            filepath = self.data_dir + "/{}.npy.h5".format(vol_name)
-            data = h5py.File(filepath)
-            image, label = data['image'][:], data['label'][:]
+        img_path, mask_path = self.data[idx]
 
-        sample = {'image': image, 'label': label}
-        if self.transform:
-            sample = self.transform(sample)
-        sample['case_name'] = self.sample_list[idx].strip('\n')
-        return sample
-        
-    
+        img = np.array(Image.open(img_path).convert("RGB"))
+        mask = np.expand_dims(np.array(Image.open(mask_path).convert("L")), axis=2) / 255.0
+
+        # --------- Augmentation فقط برای train ---------
+        if self.train:
+            if random.random() > 0.5:
+                img, mask = random_rot_flip(img, mask)
+            elif random.random() > 0.5:
+                img, mask = random_rotate(img, mask)
+
+        # --------- اعمال transformer (resize, normalize, toTensor) ---------
+        img, mask = self.transformer((img, mask))
+
+        return img, mask
+
+    def __len__(self):
+        return len(self.data)
