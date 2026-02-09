@@ -52,8 +52,8 @@ class setting_config:
     amp = False
 
     # ---------------------- Training (ignored) ----------------------
-    batch_size = 2
-    epochs = 10
+    batch_size = 8
+    epochs = 25
     print_interval = 20
     val_interval = 30
     save_interval = 100
