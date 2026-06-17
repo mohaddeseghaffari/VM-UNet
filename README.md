@@ -38,22 +38,6 @@ The .whl files of causal_conv1d and mamba_ssm could be found here. {[Baidu](http
     - masks
       - .png
 
-### Synapse datasets
-
-- For the Synapse dataset, you could follow [Swin-UNet](https://github.com/HuCaoFighting/Swin-Unet) to download the dataset, or you could download them from {[Baidu](https://pan.baidu.com/s/1JCXBfRL9y1cjfJUKtbEhiQ?pwd=9jti)}.
-
-- After downloading the datasets, you are supposed to put them into './data/Synapse/', and the file format reference is as follows.
-
-- './data/Synapse/'
-  - lists
-    - list_Synapse
-      - all.lst
-      - test_vol.txt
-      - train.txt
-  - test_vol_h5
-    - casexxxx.npy.h5
-  - train_npz
-    - casexxxx_slicexxx.npz
 
 ## 2. Prepare the pre_trained weights
 
