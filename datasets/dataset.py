@@ -52,7 +52,6 @@ class ISIC17Dataset(Dataset):
         mask = np.expand_dims(np.array(Image.open(mask_path).convert("L")), axis=2) / 255.0
 
 
-        # --------- اعمال transformer (resize, normalize, toTensor) ---------
         img, mask = self.transformer((img, mask))
 
         return img, mask
